@@ -5,6 +5,7 @@
 package dan200.computercraft.shared.computer.terminal;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -65,6 +66,19 @@ public class TerminalState {
             buf.writeVarInt(buffer.readableBytes());
             buf.writeBytes(buffer, buffer.readerIndex(), buffer.readableBytes());
         }
+    }
+
+    /**
+     * Determine whether this state would be {@linkplain #write(FriendlyByteBuf) written} identically to another state.
+     *
+     * @param other The other state, or {@code null}.
+     * @return Whether both states have exactly the same encoded form.
+     */
+    public boolean isSameAs(@Nullable TerminalState other) {
+        if (other == this) return true;
+        if (other == null || colour != other.colour) return false;
+        if (buffer == null || other.buffer == null) return buffer == other.buffer;
+        return width == other.width && height == other.height && ByteBufUtil.equals(buffer, other.buffer);
     }
 
     public boolean hasTerminal() {
