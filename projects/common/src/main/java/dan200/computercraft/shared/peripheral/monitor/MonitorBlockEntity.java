@@ -61,6 +61,12 @@ public class MonitorBlockEntity extends BlockEntity {
     boolean enqueued;
     @Nullable
     TerminalState cached;
+    /**
+     * The last state {@linkplain MonitorWatcher#onTick() broadcast} to all tracking players, used to skip identical
+     * resends. This is cleared whenever a client may have a different state.
+     */
+    @Nullable
+    TerminalState lastSent;
 
     private int width = 1;
     private int height = 1;
@@ -94,6 +100,7 @@ public class MonitorBlockEntity extends BlockEntity {
     @Override
     public void setRemoved() {
         super.setRemoved();
+        lastSent = null;
         if (clientMonitor != null) clientMonitor.destroy();
     }
 
@@ -326,6 +333,9 @@ public class MonitorBlockEntity extends BlockEntity {
     }
 
     void resize(int width, int height) {
+        // The client may recreate its monitor when the multiblock changes, so always sync the next state.
+        lastSent = null;
+
         // If we're not already the origin then we'll need to generate a new terminal.
         if (xIndex != 0 || yIndex != 0) serverMonitor = null;
 

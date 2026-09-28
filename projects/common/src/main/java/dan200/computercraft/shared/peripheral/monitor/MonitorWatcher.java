@@ -36,6 +36,9 @@ public final class MonitorWatcher {
         for (var te : chunk.getBlockEntities().values()) {
             if (!(te instanceof MonitorBlockEntity monitor)) continue;
 
+            // This player may not have seen the last broadcast state, so always send the next one.
+            monitor.lastSent = null;
+
             var serverMonitor = getMonitor(monitor);
             if (serverMonitor == null || monitor.enqueued) continue;
 
@@ -54,20 +57,33 @@ public final class MonitorWatcher {
         while ((!obeyLimit || limit > 0) && (tile = watching.poll()) != null) {
             tile.enqueued = false;
             var monitor = getMonitor(tile);
-            if (monitor == null) continue;
-
-            var pos = tile.getBlockPos();
-            var world = tile.getLevel();
-            if (!(world instanceof ServerLevel)) continue;
-
-            var chunk = world.getChunkAt(pos);
-            if (((ServerLevel) world).getChunkSource().chunkMap.getPlayers(chunk.getPos(), false).isEmpty()) {
+            if (monitor == null) {
+                tile.lastSent = null;
                 continue;
             }
 
-            var state = getState(tile, monitor);
-            ServerNetworking.sendToAllTracking(new MonitorClientMessage(pos, state), chunk);
+            var pos = tile.getBlockPos();
+            var world = tile.getLevel();
+            if (!(world instanceof ServerLevel)) {
+                tile.lastSent = null;
+                continue;
+            }
 
+            var chunk = world.getChunkAt(pos);
+            if (((ServerLevel) world).getChunkSource().chunkMap.getPlayers(chunk.getPos(), false).isEmpty()) {
+                tile.lastSent = null;
+                continue;
+            }
+
+            // Every tracking player already has the last broadcast state (new watchers reset lastSent in onWatch), so
+            // resending an identical state would have no visible effect.
+            var state = getState(tile, monitor);
+            if (!state.isSameAs(tile.lastSent)) {
+                ServerNetworking.sendToAllTracking(new MonitorClientMessage(pos, state), chunk);
+                tile.lastSent = state;
+            }
+
+            // Always count the state against the limit, so skipping a send does not change when other monitors are sent.
             limit -= state.size();
         }
     }
